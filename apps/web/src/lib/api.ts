@@ -24,8 +24,16 @@ export function clearStoredAuth() {
   localStorage.removeItem(STORAGE_KEY);
 }
 
+function resolveApiBaseUrl(): string {
+  const raw = import.meta.env.VITE_API_URL;
+  if (!raw) return 'http://localhost:3001/api';
+  // Permite pasar solo el host (ej. desde Render Blueprints, donde no se conoce
+  // el subdominio final de antemano) además de una URL completa.
+  return raw.includes('://') ? raw : `https://${raw}/api`;
+}
+
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:3001/api',
+  baseURL: resolveApiBaseUrl(),
 });
 
 api.interceptors.request.use((config) => {

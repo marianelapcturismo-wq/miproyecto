@@ -113,6 +113,12 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
 };
 
 async function main() {
+  const existingHotel = await prisma.hotel.findFirst();
+  if (existingHotel) {
+    console.log('Ya hay datos cargados (se encontró un hotel existente), se omite el seed.');
+    return;
+  }
+
   console.log('Sembrando catálogo de permisos y roles...');
   await prisma.permission.createMany({
     data: PERMISSIONS.map(([code, description]) => ({ code, description })),

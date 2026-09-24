@@ -52,12 +52,32 @@ Datos de prueba realistas (seed) para poder probar todo el flujo de punta a punt
 - **Frontend**: React + TypeScript, Vite, TailwindCSS, TanStack Query, React Router
 - **Base de datos**: PostgreSQL, multi-tenant (`hotelId` en cada tabla de negocio), constraint a nivel de base de datos que impide reservas superpuestas por habitación
 
-## Requisitos
+## Desplegarlo gratis, sin instalar nada (Render)
+
+La forma más simple de probar el sistema es desplegarlo con un click en
+[Render](https://render.com) usando el Blueprint (`render.yaml`) incluido en
+este repo. Crea automáticamente la base de datos, la API y el frontend, ya
+conectados entre sí:
+
+**[→ Desplegar en Render](https://render.com/deploy?repo=https://github.com/marianelapcturismo-wq/miproyecto/tree/claude/hotel-management-system-ecgj8j)**
+
+1. Entrás con tu cuenta de GitHub (o creás una gratis).
+2. Click en "Apply" — Render crea los 3 servicios (DB + API + web) del plan free.
+3. Esperás unos 5 minutos a que termine de instalar y cargar los datos de prueba.
+4. Abrís la URL del servicio `hotel-pms-web` que te muestra Render. Usuarios de prueba abajo.
+
+**A tener en cuenta del plan free de Render**: el servicio web/API se
+"duerme" tras ~15 min sin uso (la primera carga después de eso tarda
+30-60 segundos en despertar), y la base de datos gratuita expira a los 30
+días si no se la pasa a un plan pago — para un primer uso o una demo
+alcanza y sobra, pero no lo dejes así para operar el hotel día a día.
+
+## Requisitos (para correrlo en tu computadora)
 
 - Node.js 20+
 - PostgreSQL 14+ (con extensión `btree_gist`)
 
-## Cómo correrlo
+## Cómo correrlo en tu computadora
 
 ```bash
 # 1. Instalar dependencias (workspaces: root, apps/api, apps/web)
