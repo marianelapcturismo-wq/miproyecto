@@ -9,6 +9,7 @@ import { ReservationStatusBadge } from '../components/ui/Badge';
 import { formatCurrency, formatDate, formatDateTime } from '../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { PaymentFormModal } from '../components/reservations/PaymentFormModal';
+import { ConsumptionFormModal } from '../components/reservations/ConsumptionFormModal';
 
 export function ReservationDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -16,6 +17,7 @@ export function ReservationDetailPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showPayment, setShowPayment] = useState(false);
+  const [showConsumption, setShowConsumption] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
 
   const { data: reservation, isLoading } = useQuery({
@@ -52,6 +54,7 @@ export function ReservationDetailPage() {
   const canCheckout = hasPermission('reservations.checkout') && reservation.status === 'CHECK_IN';
   const canCancel = hasPermission('reservations.cancel') && !['CHECK_OUT', 'CANCELADA'].includes(reservation.status);
   const canPay = hasPermission('payments.create') && !['CANCELADA', 'NO_SHOW'].includes(reservation.status);
+  const canConsume = hasPermission('consumptions.create') && !['CANCELADA', 'NO_SHOW', 'CHECK_OUT'].includes(reservation.status);
 
   return (
     <div className="space-y-4">
@@ -90,6 +93,11 @@ export function ReservationDetailPage() {
             Registrar pago
           </Button>
         )}
+        {canConsume && (
+          <Button variant="secondary" onClick={() => setShowConsumption(true)}>
+            Cargar consumo
+          </Button>
+        )}
         {canCancel && (
           <Button variant="danger" onClick={() => cancel.mutate()} disabled={cancel.isPending}>
             Cancelar reserva
@@ -121,7 +129,7 @@ export function ReservationDetailPage() {
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-500">Canal</dt>
-              <dd className="capitalize text-slate-800">{reservation.channel}</dd>
+              <dd className="text-slate-800">{reservation.channel.name}</dd>
             </div>
             <div className="flex justify-between">
               <dt className="text-slate-500">Plan de tarifa</dt>
@@ -161,6 +169,14 @@ export function ReservationDetailPage() {
               <dt className="text-slate-500">Noches</dt>
               <dd className="text-slate-800">{reservation.nights}</dd>
             </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Subtotal alojamiento</dt>
+              <dd className="text-slate-800">{formatCurrency(reservation.roomTotal, user?.hotel.currency)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt className="text-slate-500">Consumos y servicios</dt>
+              <dd className="text-slate-800">{formatCurrency(reservation.consumptionsTotal, user?.hotel.currency)}</dd>
+            </div>
             <div className="flex justify-between border-t border-slate-100 pt-2 font-medium">
               <dt className="text-slate-600">Total estadía</dt>
               <dd className="text-slate-900">{formatCurrency(reservation.total, user?.hotel.currency)}</dd>
@@ -197,7 +213,36 @@ export function ReservationDetailPage() {
         </Card>
       </div>
 
+      <Card className="p-4">
+        <h2 className="mb-3 text-sm font-semibold text-slate-900">Consumos y servicios ({reservation.consumptions.length})</h2>
+        {reservation.consumptions.length === 0 ? (
+          <p className="text-sm text-slate-400">Todavía no se cargaron consumos.</p>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-slate-200 text-left text-xs uppercase tracking-wide text-slate-500">
+                <th className="py-2">Servicio</th>
+                <th className="py-2">Cantidad</th>
+                <th className="py-2">Fecha</th>
+                <th className="py-2 text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {reservation.consumptions.map((c) => (
+                <tr key={c.id} className="border-b border-slate-100 last:border-0">
+                  <td className="py-2 text-slate-800">{c.service.name}</td>
+                  <td className="py-2 text-slate-600">{c.quantity}</td>
+                  <td className="py-2 text-slate-500">{formatDateTime(c.date)}</td>
+                  <td className="py-2 text-right font-medium text-slate-800">{formatCurrency(Number(c.unitPrice) * c.quantity, user?.hotel.currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+
       {showPayment && <PaymentFormModal reservationId={reservation.id} suggestedAmount={reservation.balance} onClose={() => setShowPayment(false)} />}
+      {showConsumption && <ConsumptionFormModal reservationId={reservation.id} onClose={() => setShowConsumption(false)} />}
     </div>
   );
 }

@@ -69,7 +69,7 @@ export function ReservationsPage() {
                   <td className="px-4 py-2 text-slate-600">{r.room.number}</td>
                   <td className="px-4 py-2 text-slate-600">{formatDate(r.checkInDate)}</td>
                   <td className="px-4 py-2 text-slate-600">{formatDate(r.checkOutDate)}</td>
-                  <td className="px-4 py-2 text-slate-500 capitalize">{r.channel}</td>
+                  <td className="px-4 py-2 text-slate-500">{r.channel.name}</td>
                   <td className="px-4 py-2">
                     <ReservationStatusBadge status={r.status} />
                   </td>

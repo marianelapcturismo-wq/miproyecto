@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import { ReservationStatus, RoomStatus } from '@prisma/client';
+import { CashSessionStatus, HousekeepingStatus, MaintenanceStatus, ReservationStatus, RoomStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { ReservationsService } from '../reservations/reservations.service';
 
@@ -26,7 +26,18 @@ export class DashboardService {
     const tomorrow = addDays(today, 1);
     const in7 = addDays(today, 7);
 
-    const [roomsByStatus, checkInsToday, checkOutsToday, arrivalsNext7, departuresNext7, pendingCount, activeReservations] = await Promise.all([
+    const [
+      roomsByStatus,
+      checkInsToday,
+      checkOutsToday,
+      arrivalsNext7,
+      departuresNext7,
+      pendingCount,
+      activeReservations,
+      pendingHousekeepingTasks,
+      pendingMaintenanceTasks,
+      openCashSession,
+    ] = await Promise.all([
       this.prisma.room.groupBy({ by: ['status'], where: { hotelId }, _count: true }),
       this.prisma.reservation.findMany({
         where: { hotelId, status: ReservationStatus.CONFIRMADA, checkInDate: { gte: today, lt: tomorrow } },
@@ -47,8 +58,11 @@ export class DashboardService {
       }),
       this.prisma.reservation.findMany({
         where: { hotelId, status: { in: [ReservationStatus.CONFIRMADA, ReservationStatus.CHECK_IN] } },
-        include: { payments: true, titularGuest: true, room: true },
+        include: { payments: true, consumptions: true, titularGuest: true, room: true },
       }),
+      this.prisma.housekeepingTask.count({ where: { hotelId, status: { in: [HousekeepingStatus.PENDIENTE, HousekeepingStatus.EN_PROCESO, HousekeepingStatus.CON_PROBLEMA] } } }),
+      this.prisma.maintenanceTask.count({ where: { hotelId, status: { not: MaintenanceStatus.RESUELTO } } }),
+      this.prisma.cashSession.findFirst({ where: { hotelId, status: CashSessionStatus.ABIERTA } }),
     ]);
 
     const countByStatus = (status: RoomStatus) => roomsByStatus.find((r) => r.status === status)?._count ?? 0;
@@ -67,6 +81,9 @@ export class DashboardService {
     if (withPendingBalance.length > 0) alerts.push(`${withPendingBalance.length} reserva(s) activa(s) con saldo pendiente de cobro.`);
     if (countByStatus(RoomStatus.MANTENIMIENTO) > 0) alerts.push(`${countByStatus(RoomStatus.MANTENIMIENTO)} habitación(es) en mantenimiento.`);
     if (sellableRooms > 0 && occupancyRate < 30) alerts.push('La ocupación actual está por debajo del 30%.');
+    if (pendingHousekeepingTasks > 0) alerts.push(`${pendingHousekeepingTasks} tarea(s) de housekeeping pendientes.`);
+    if (pendingMaintenanceTasks > 0) alerts.push(`${pendingMaintenanceTasks} tarea(s) de mantenimiento sin resolver.`);
+    if (!openCashSession) alerts.push('No hay una caja abierta.');
 
     return {
       occupancy: {
@@ -90,6 +107,9 @@ export class DashboardService {
         room: r.room.number,
         balance: r.balance,
       })),
+      pendingHousekeepingTasks,
+      pendingMaintenanceTasks,
+      cashSessionOpen: !!openCashSession,
       alerts,
     };
   }

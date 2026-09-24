@@ -8,10 +8,11 @@ preparada para escalar a múltiples hoteles.
 Ver `docs/01-analisis-arquitectura.md` para el análisis funcional completo,
 las decisiones de arquitectura y el alcance de cada etapa.
 
-## Estado actual: MVP (Etapa 3)
+## Estado actual: Etapa 4 (Operación) completa
 
 Implementado y probado end-to-end:
 
+**Etapa 3 — MVP**
 - Login con JWT (access + refresh) y permisos por rol configurables en base de datos
 - Dashboard operativo (ocupación, check-ins/outs de hoy, pagos pendientes, alertas)
 - Tipos de habitación y habitaciones (con estados: disponible, ocupada, limpieza, mantenimiento, fuera de servicio)
@@ -21,7 +22,16 @@ Implementado y probado end-to-end:
 - Check-in / check-out con actualización automática del estado de la habitación
 - Pagos básicos (seña, parcial, final, devolución) y saldo de cuenta por reserva
 - Auditoría de acciones relevantes (`AuditLog`)
-- Datos de prueba realistas (seed) para poder probar todo el flujo
+
+**Etapa 4 — Operación**
+- Servicios y consumos: catálogo de servicios adicionales y carga de consumos por reserva, incluidos automáticamente en el saldo de la cuenta
+- Caja diaria: apertura, movimientos manuales (ingreso/egreso), cierre con diferencia contra el saldo esperado, e ingresos automáticos al registrar un pago de reserva mientras la caja está abierta
+- Housekeeping: tareas de limpieza por habitación con flujo de estados (pendiente → en proceso → limpia → inspeccionada, o con problema), creadas automáticamente al hacer check-out
+- Mantenimiento: incidencias por habitación con prioridad y estado, que ponen la habitación en "Mantenimiento" y la liberan a "Disponible" al resolverse
+- Tarifas: CRUD completo de planes de tarifa y precios vigentes por tipo de habitación y rango de fechas
+- Canales de venta: entidad propia con comisión asociada (reemplaza el campo de texto libre del MVP)
+
+Datos de prueba realistas (seed) para poder probar todo el flujo de punta a punta.
 
 ## Stack
 
@@ -84,6 +94,6 @@ Documentadas en detalle en `docs/01-analisis-arquitectura.md`. Las más relevant
 - **Aislamiento por `hotelId` a nivel de aplicación**, no Row-Level Security de Postgres: suficiente para el MVP; RLS es candidato a sumarse cuando el sistema pase a multi-hotel comercial real.
 - **Calendario con creación por click + edición vía formulario**, sin arrastrar-y-soltar reservas todavía (queda como mejora de UX de una próxima etapa).
 
-## Próximos pasos (Etapa 4 en adelante)
+## Próximos pasos (Etapa 5 en adelante)
 
-Consumos y servicios adicionales, caja diaria con cierre, gestión de tarifas por temporada/plan avanzada, canales de venta con comisión, housekeeping y mantenimiento como módulos propios, y luego el dashboard gerencial / BI (ocupación, ADR, RevPAR, forecast, objetivos, alertas) descripto en el análisis.
+Dashboard gerencial / BI: KPIs de ocupación, ADR, RevPAR con la tabla de agregación diaria (`daily_hotel_metrics`) pendiente de implementar, comparaciones contra períodos anteriores, objetivos, alertas gerenciales, forecast a 7/30/90 días, reportes exportables y auditoría avanzada — descripto en detalle en el análisis.

@@ -23,20 +23,27 @@ model Hotel {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  users        User[]
-  guests       Guest[]
-  roomTypes    RoomType[]
-  rooms        Room[]
-  ratePlans    RatePlan[]
-  rates        Rate[]
-  reservations Reservation[]
-  payments     Payment[]
-  auditLogs    AuditLog[]
+  users             User[]
+  guests            Guest[]
+  roomTypes         RoomType[]
+  rooms             Room[]
+  ratePlans         RatePlan[]
+  rates             Rate[]
+  channels          Channel[]
+  reservations      Reservation[]
+  payments          Payment[]
+  services          Service[]
+  consumptions      Consumption[]
+  cashSessions      CashSession[]
+  cashMovements     CashMovement[]
+  housekeepingTasks HousekeepingTask[]
+  maintenanceTasks  MaintenanceTask[]
+  auditLogs         AuditLog[]
 }
 
 model Role {
-  id          String   @id @default(cuid())
-  code        String   @unique // ADMIN | GERENTE | RECEPCION | HOUSEKEEPING | MANTENIMIENTO
+  id          String  @id @default(cuid())
+  code        String  @unique // ADMIN | GERENTE | RECEPCION | HOUSEKEEPING | MANTENIMIENTO
   name        String
   description String?
 
@@ -77,9 +84,15 @@ model User {
   hotel Hotel @relation(fields: [hotelId], references: [id])
   role  Role  @relation(fields: [roleId], references: [id])
 
-  reservationsCreated Reservation[] @relation("ReservationCreatedBy")
-  payments            Payment[]
-  auditLogs           AuditLog[]
+  reservationsCreated       Reservation[]      @relation("ReservationCreatedBy")
+  payments                  Payment[]
+  consumptionsRegistered    Consumption[]
+  cashSessionsOpened        CashSession[]      @relation("CashSessionOpenedBy")
+  cashSessionsClosed        CashSession[]      @relation("CashSessionClosedBy")
+  cashMovements             CashMovement[]
+  housekeepingTasksAssigned HousekeepingTask[] @relation("HousekeepingAssignedTo")
+  maintenanceTasksAssigned  MaintenanceTask[]  @relation("MaintenanceAssignedTo")
+  auditLogs                 AuditLog[]
 
   @@index([hotelId])
 }
@@ -160,7 +173,9 @@ model Room {
   hotel    Hotel    @relation(fields: [hotelId], references: [id])
   roomType RoomType @relation(fields: [roomTypeId], references: [id])
 
-  reservations Reservation[]
+  reservations      Reservation[]
+  housekeepingTasks HousekeepingTask[]
+  maintenanceTasks  MaintenanceTask[]
 
   @@unique([hotelId, number])
 }
@@ -170,13 +185,13 @@ model Room {
 // ---------------------------------------------------------------------------
 
 model RatePlan {
-  id                String   @id @default(cuid())
+  id                String  @id @default(cuid())
   hotelId           String
   name              String
-  refundable        Boolean  @default(true)
-  includesBreakfast Boolean  @default(false)
+  refundable        Boolean @default(true)
+  includesBreakfast Boolean @default(false)
   description       String?
-  active            Boolean  @default(true)
+  active            Boolean @default(true)
 
   hotel        Hotel         @relation(fields: [hotelId], references: [id])
   rates        Rate[]
@@ -205,6 +220,73 @@ model Rate {
 }
 
 // ---------------------------------------------------------------------------
+// Canales de venta
+// ---------------------------------------------------------------------------
+
+model Channel {
+  id            String  @id @default(cuid())
+  hotelId       String
+  code          String // DIRECTO | WEB | WHATSAPP | BOOKING | EXPEDIA | AGENCIA | EMPRESA | OTRO
+  name          String
+  commissionPct Decimal @default(0) @db.Decimal(5, 2) // % de comisión sobre el ingreso bruto
+  active        Boolean @default(true)
+
+  hotel        Hotel         @relation(fields: [hotelId], references: [id])
+  reservations Reservation[]
+
+  @@unique([hotelId, code])
+}
+
+// ---------------------------------------------------------------------------
+// Servicios y consumos
+// ---------------------------------------------------------------------------
+
+enum ServiceCategory {
+  DESAYUNO
+  RESTAURANTE
+  BAR
+  MINIBAR
+  ESTACIONAMIENTO
+  LAVANDERIA
+  EXCURSION
+  OTRO
+}
+
+model Service {
+  id       String          @id @default(cuid())
+  hotelId  String
+  name     String
+  category ServiceCategory @default(OTRO)
+  price    Decimal         @db.Decimal(12, 2)
+  active   Boolean         @default(true)
+
+  hotel        Hotel         @relation(fields: [hotelId], references: [id])
+  consumptions Consumption[]
+
+  @@unique([hotelId, name])
+}
+
+model Consumption {
+  id             String   @id @default(cuid())
+  hotelId        String
+  reservationId  String
+  serviceId      String
+  quantity       Int      @default(1)
+  unitPrice      Decimal  @db.Decimal(12, 2) // snapshot del precio del servicio al momento de cargarlo
+  date           DateTime @default(now())
+  notes          String?
+  registeredById String
+  createdAt      DateTime @default(now())
+
+  hotel        Hotel       @relation(fields: [hotelId], references: [id])
+  reservation  Reservation @relation(fields: [reservationId], references: [id])
+  service      Service     @relation(fields: [serviceId], references: [id])
+  registeredBy User        @relation(fields: [registeredById], references: [id])
+
+  @@index([hotelId, reservationId])
+}
+
+// ---------------------------------------------------------------------------
 // Reservas
 // ---------------------------------------------------------------------------
 
@@ -219,34 +301,36 @@ enum ReservationStatus {
 }
 
 model Reservation {
-  id              String    @id @default(cuid())
-  hotelId         String
-  titularGuestId  String
-  roomId          String
-  ratePlanId      String?
-  rateId          String?
-  checkInDate     DateTime  @db.Date // fecha prevista de entrada
-  checkOutDate    DateTime  @db.Date // fecha prevista de salida
-  actualCheckInAt DateTime? // momento real del check-in
-  actualCheckOutAt DateTime? // momento real del check-out
-  guestsCount     Int       @default(1)
-  status          ReservationStatus @default(CONSULTA)
-  channel         String    @default("directo")
-  agreedPricePerNight Decimal @db.Decimal(12, 2)
-  notes           String?
-  createdById     String
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  id                  String            @id @default(cuid())
+  hotelId             String
+  titularGuestId      String
+  roomId              String
+  ratePlanId          String?
+  rateId              String?
+  checkInDate         DateTime          @db.Date // fecha prevista de entrada
+  checkOutDate        DateTime          @db.Date // fecha prevista de salida
+  actualCheckInAt     DateTime? // momento real del check-in
+  actualCheckOutAt    DateTime? // momento real del check-out
+  guestsCount         Int               @default(1)
+  status              ReservationStatus @default(CONSULTA)
+  channelId           String
+  agreedPricePerNight Decimal           @db.Decimal(12, 2)
+  notes               String?
+  createdById         String
+  createdAt           DateTime          @default(now())
+  updatedAt           DateTime          @updatedAt
 
   hotel        Hotel     @relation(fields: [hotelId], references: [id])
   titularGuest Guest     @relation("ReservationTitular", fields: [titularGuestId], references: [id])
   room         Room      @relation(fields: [roomId], references: [id])
   ratePlan     RatePlan? @relation(fields: [ratePlanId], references: [id])
   rate         Rate?     @relation(fields: [rateId], references: [id])
+  channel      Channel   @relation(fields: [channelId], references: [id])
   createdBy    User      @relation("ReservationCreatedBy", fields: [createdById], references: [id])
 
-  guests   ReservationGuest[]
-  payments Payment[]
+  guests       ReservationGuest[]
+  payments     Payment[]
+  consumptions Consumption[]
 
   @@index([hotelId, roomId, checkInDate, checkOutDate])
   @@index([hotelId, status])
@@ -297,7 +381,131 @@ model Payment {
   reservation  Reservation @relation(fields: [reservationId], references: [id])
   registeredBy User        @relation(fields: [registeredById], references: [id])
 
+  cashMovement CashMovement?
+
   @@index([hotelId, reservationId])
+}
+
+// ---------------------------------------------------------------------------
+// Caja
+// ---------------------------------------------------------------------------
+
+enum CashSessionStatus {
+  ABIERTA
+  CERRADA
+}
+
+model CashSession {
+  id            String            @id @default(cuid())
+  hotelId       String
+  openedById    String
+  openedAt      DateTime          @default(now())
+  openingAmount Decimal           @db.Decimal(12, 2)
+  closedById    String?
+  closedAt      DateTime?
+  closingAmount Decimal?          @db.Decimal(12, 2)
+  status        CashSessionStatus @default(ABIERTA)
+  notes         String?
+
+  hotel     Hotel          @relation(fields: [hotelId], references: [id])
+  openedBy  User           @relation("CashSessionOpenedBy", fields: [openedById], references: [id])
+  closedBy  User?          @relation("CashSessionClosedBy", fields: [closedById], references: [id])
+  movements CashMovement[]
+
+  @@index([hotelId, status])
+}
+
+enum CashMovementType {
+  INGRESO
+  EGRESO
+}
+
+model CashMovement {
+  id             String           @id @default(cuid())
+  hotelId        String
+  cashSessionId  String
+  type           CashMovementType
+  concept        String
+  amount         Decimal          @db.Decimal(12, 2)
+  method         PaymentMethod    @default(EFECTIVO)
+  paymentId      String?          @unique
+  registeredById String
+  createdAt      DateTime         @default(now())
+
+  hotel        Hotel       @relation(fields: [hotelId], references: [id])
+  cashSession  CashSession @relation(fields: [cashSessionId], references: [id])
+  payment      Payment?    @relation(fields: [paymentId], references: [id])
+  registeredBy User        @relation(fields: [registeredById], references: [id])
+
+  @@index([hotelId, cashSessionId])
+}
+
+// ---------------------------------------------------------------------------
+// Housekeeping
+// ---------------------------------------------------------------------------
+
+enum HousekeepingStatus {
+  PENDIENTE
+  EN_PROCESO
+  LIMPIA
+  INSPECCIONADA
+  CON_PROBLEMA
+}
+
+model HousekeepingTask {
+  id           String             @id @default(cuid())
+  hotelId      String
+  roomId       String
+  status       HousekeepingStatus @default(PENDIENTE)
+  assignedToId String?
+  notes        String?
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  completedAt  DateTime?
+
+  hotel      Hotel @relation(fields: [hotelId], references: [id])
+  room       Room  @relation(fields: [roomId], references: [id])
+  assignedTo User? @relation("HousekeepingAssignedTo", fields: [assignedToId], references: [id])
+
+  @@index([hotelId, status])
+  @@index([hotelId, roomId])
+}
+
+// ---------------------------------------------------------------------------
+// Mantenimiento
+// ---------------------------------------------------------------------------
+
+enum MaintenancePriority {
+  BAJA
+  MEDIA
+  ALTA
+}
+
+enum MaintenanceStatus {
+  PENDIENTE
+  EN_PROCESO
+  RESUELTO
+}
+
+model MaintenanceTask {
+  id           String              @id @default(cuid())
+  hotelId      String
+  roomId       String
+  issue        String
+  priority     MaintenancePriority @default(MEDIA)
+  status       MaintenanceStatus   @default(PENDIENTE)
+  assignedToId String?
+  notes        String?
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  resolvedAt   DateTime?
+
+  hotel      Hotel @relation(fields: [hotelId], references: [id])
+  room       Room  @relation(fields: [roomId], references: [id])
+  assignedTo User? @relation("MaintenanceAssignedTo", fields: [assignedToId], references: [id])
+
+  @@index([hotelId, status])
+  @@index([hotelId, roomId])
 }
 
 // ---------------------------------------------------------------------------

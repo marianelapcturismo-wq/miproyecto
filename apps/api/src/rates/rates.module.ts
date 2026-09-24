@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 import { RatesService } from './rates.service';
-import { RatesController } from './rates.controller';
+import { RatesController, RatesRatesController } from './rates.controller';
 
 @Module({
   providers: [RatesService],
-  controllers: [RatesController],
+  controllers: [RatesController, RatesRatesController],
   exports: [RatesService],
 })
 export class RatesModule {}

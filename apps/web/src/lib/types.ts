@@ -12,6 +12,13 @@ export type ReservationStatus =
 export type PaymentMethod = 'EFECTIVO' | 'TRANSFERENCIA' | 'TARJETA' | 'OTRO';
 export type PaymentType = 'SENA' | 'PARCIAL' | 'FINAL' | 'DEVOLUCION';
 
+export type ServiceCategory = 'DESAYUNO' | 'RESTAURANTE' | 'BAR' | 'MINIBAR' | 'ESTACIONAMIENTO' | 'LAVANDERIA' | 'EXCURSION' | 'OTRO';
+export type CashSessionStatus = 'ABIERTA' | 'CERRADA';
+export type CashMovementType = 'INGRESO' | 'EGRESO';
+export type HousekeepingStatus = 'PENDIENTE' | 'EN_PROCESO' | 'LIMPIA' | 'INSPECCIONADA' | 'CON_PROBLEMA';
+export type MaintenancePriority = 'BAJA' | 'MEDIA' | 'ALTA';
+export type MaintenanceStatus = 'PENDIENTE' | 'EN_PROCESO' | 'RESUELTO';
+
 export interface AuthUser {
   id: string;
   email: string;
@@ -66,6 +73,45 @@ export interface RatePlan {
   refundable: boolean;
   includesBreakfast: boolean;
   description?: string | null;
+  active?: boolean;
+}
+
+export interface Rate {
+  id: string;
+  ratePlanId: string;
+  ratePlan?: RatePlan;
+  roomTypeId: string;
+  roomType?: RoomType;
+  price: string;
+  validFrom: string;
+  validTo: string;
+}
+
+export interface Channel {
+  id: string;
+  code: string;
+  name: string;
+  commissionPct: string;
+  active: boolean;
+}
+
+export interface Service {
+  id: string;
+  name: string;
+  category: ServiceCategory;
+  price: string;
+  active: boolean;
+}
+
+export interface Consumption {
+  id: string;
+  reservationId: string;
+  serviceId: string;
+  service: Service;
+  quantity: number;
+  unitPrice: string;
+  date: string;
+  notes?: string | null;
 }
 
 export interface Payment {
@@ -91,15 +137,70 @@ export interface Reservation {
   actualCheckOutAt?: string | null;
   guestsCount: number;
   status: ReservationStatus;
-  channel: string;
+  channelId: string;
+  channel: Channel;
   agreedPricePerNight: string;
   notes?: string | null;
   payments: Payment[];
+  consumptions: Consumption[];
   nights: number;
+  roomTotal: number;
+  consumptionsTotal: number;
   total: number;
   paid: number;
   balance: number;
   createdBy: { id: string; firstName: string; lastName: string };
+}
+
+export interface CashMovement {
+  id: string;
+  type: CashMovementType;
+  concept: string;
+  amount: string;
+  method: PaymentMethod;
+  paymentId?: string | null;
+  registeredBy: { id: string; firstName: string; lastName: string };
+  createdAt: string;
+}
+
+export interface CashSession {
+  id: string;
+  openingAmount: string;
+  closingAmount?: string | null;
+  status: CashSessionStatus;
+  notes?: string | null;
+  openedAt: string;
+  closedAt?: string | null;
+  openedBy: { id: string; firstName: string; lastName: string };
+  closedBy?: { id: string; firstName: string; lastName: string } | null;
+  movements: CashMovement[];
+  summary: { ingresos: number; egresos: number; expectedAmount: number };
+}
+
+export interface HousekeepingTask {
+  id: string;
+  roomId: string;
+  room: Room;
+  status: HousekeepingStatus;
+  assignedToId?: string | null;
+  assignedTo?: { id: string; firstName: string; lastName: string } | null;
+  notes?: string | null;
+  createdAt: string;
+  completedAt?: string | null;
+}
+
+export interface MaintenanceTask {
+  id: string;
+  roomId: string;
+  room: Room;
+  issue: string;
+  priority: MaintenancePriority;
+  status: MaintenanceStatus;
+  assignedToId?: string | null;
+  assignedTo?: { id: string; firstName: string; lastName: string } | null;
+  notes?: string | null;
+  createdAt: string;
+  resolvedAt?: string | null;
 }
 
 export interface DashboardToday {
@@ -119,5 +220,8 @@ export interface DashboardToday {
   departuresNext7Days: number;
   pendingReservations: number;
   pendingPayments: { id: string; guest: string; room: string; balance: number }[];
+  pendingHousekeepingTasks: number;
+  pendingMaintenanceTasks: number;
+  cashSessionOpen: boolean;
   alerts: string[];
 }

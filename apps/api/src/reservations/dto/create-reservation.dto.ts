@@ -22,9 +22,8 @@ export class CreateReservationDto {
   @Min(1)
   guestsCount?: number;
 
-  @IsOptional()
   @IsString()
-  channel?: string;
+  channelId!: string;
 
   @IsNumber()
   @Min(0)

@@ -21,11 +21,19 @@ const GROUPS: NavGroup[] = [
       { to: '/reservations', label: 'Reservas', permission: 'reservations.view' },
       { to: '/guests', label: 'Huéspedes', permission: 'guests.view' },
       { to: '/rooms', label: 'Habitaciones', permission: 'rooms.view' },
+      { to: '/housekeeping', label: 'Housekeeping', permission: 'housekeeping.view' },
+      { to: '/maintenance', label: 'Mantenimiento', permission: 'maintenance.view' },
     ],
   },
   {
     label: 'Administración',
-    items: [{ to: '/room-types', label: 'Tipos de habitación', permission: 'roomtypes.view' }],
+    items: [
+      { to: '/room-types', label: 'Tipos de habitación', permission: 'roomtypes.view' },
+      { to: '/rates', label: 'Tarifas', permission: 'rates.manage' },
+      { to: '/services', label: 'Servicios', permission: 'services.view' },
+      { to: '/channels', label: 'Canales de venta', permission: 'channels.view' },
+      { to: '/cash', label: 'Caja', permission: 'cash.view' },
+    ],
   },
 ];
 

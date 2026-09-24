@@ -18,7 +18,7 @@ usuario.
 1. **Análisis** (hecho) — objetivo, usuarios, procesos, riesgos, ambigüedades.
 2. **Arquitectura** (hecho) — stack, modelo de datos, seguridad, escalabilidad.
 3. **MVP** (hecho) — login, dashboard, habitaciones, tipos, huéspedes, reservas, calendario, disponibilidad, check-in/out, pagos básicos.
-4. **Operación** (pendiente) — consumos, servicios adicionales, caja, housekeeping, mantenimiento, tarifas avanzadas, canales de venta.
+4. **Operación** (hecho) — consumos, servicios adicionales, caja, housekeeping, mantenimiento, tarifas avanzadas, canales de venta.
 5. **Gestión** (pendiente) — reportes, KPIs (ocupación, ADR, RevPAR), dashboard gerencial, comparaciones, objetivos, alertas, forecast, auditoría avanzada, exportaciones.
 6. **Escalabilidad** (pendiente, solo preparar arquitectura) — motor de reservas online, channel manager, WhatsApp/email, facturación electrónica, medios de pago, multi-hotel comercial, multi-moneda, multi-idioma, CRM, app móvil.
 
@@ -49,8 +49,9 @@ no hardcodeados, para que puedan evolucionar sin tocar código.
 Multi-tenant: toda tabla de negocio lleva `hotelId`. Entidades del MVP:
 `Hotel`, `User`, `Role`/`Permission`/`RolePermission`, `Guest`, `RoomType`,
 `Room`, `RatePlan`/`Rate`, `Reservation`/`ReservationGuest`, `Payment`,
-`AuditLog`. Ver `prisma/schema.prisma` para el detalle completo (tipos,
-relaciones, índices).
+`AuditLog`. Sumadas en la Etapa 4: `Channel`, `Service`/`Consumption`,
+`CashSession`/`CashMovement`, `HousekeepingTask`, `MaintenanceTask`. Ver
+`prisma/schema.prisma` para el detalle completo (tipos, relaciones, índices).
 
 Precisiones de diseño:
 - `RatePlan` (política comercial) separado de `Rate` (precio concreto por
@@ -60,6 +61,20 @@ Precisiones de diseño:
   es la pieza pendiente para que el dashboard gerencial no recalcule KPIs
   sobre las tablas transaccionales en crudo. Debe construirse en la Etapa 5,
   antes o junto con los primeros reportes de ocupación/ADR/RevPAR.
+- `Reservation.channel` (texto libre del MVP) se migró a `Reservation.channelId`
+  (FK a `Channel`) en la Etapa 4, con una migración de datos que crea los
+  canales por defecto y reasigna cada reserva existente según su texto
+  anterior — sin pérdida de datos.
+- El saldo de una reserva (`ReservationsService.withBalance`) ahora suma
+  `roomTotal` (noches × precio) + `consumptionsTotal` (consumos y servicios
+  cargados), no solo el alojamiento.
+- Un pago registrado sobre una reserva genera automáticamente un movimiento
+  de caja (`CashMovement`) si hay una `CashSession` abierta para el hotel;
+  si no hay caja abierta, el pago igual se registra pero no impacta en
+  ningún arqueo hasta que se abra una.
+- El check-out de una reserva crea automáticamente una `HousekeepingTask`
+  pendiente para la habitación, cerrando el círculo operativo descripto en
+  el punto 11 del pedido original (check-out → habitación a limpieza).
 
 ## Stack técnico
 

@@ -30,18 +30,28 @@ export class ReservationsService {
       titularGuest: true,
       room: { include: { roomType: true } },
       ratePlan: true,
+      channel: true,
       payments: { orderBy: { createdAt: 'desc' as const } },
+      consumptions: { include: { service: true }, orderBy: { date: 'desc' as const } },
       createdBy: { select: { id: true, firstName: true, lastName: true } },
     };
   }
 
-  withBalance<T extends { agreedPricePerNight: Prisma.Decimal | number; checkInDate: Date; checkOutDate: Date; payments: { amount: Prisma.Decimal | number; type: string }[] }>(
-    reservation: T,
-  ) {
+  withBalance<
+    T extends {
+      agreedPricePerNight: Prisma.Decimal | number;
+      checkInDate: Date;
+      checkOutDate: Date;
+      payments: { amount: Prisma.Decimal | number; type: string }[];
+      consumptions?: { quantity: number; unitPrice: Prisma.Decimal | number }[];
+    },
+  >(reservation: T) {
     const nights = nightsBetween(new Date(reservation.checkInDate), new Date(reservation.checkOutDate));
-    const total = nights * Number(reservation.agreedPricePerNight);
+    const roomTotal = nights * Number(reservation.agreedPricePerNight);
+    const consumptionsTotal = (reservation.consumptions ?? []).reduce((sum, c) => sum + c.quantity * Number(c.unitPrice), 0);
+    const total = roomTotal + consumptionsTotal;
     const paid = reservation.payments.reduce((sum, p) => sum + (p.type === 'DEVOLUCION' ? -Number(p.amount) : Number(p.amount)), 0);
-    return { ...reservation, nights, total, paid, balance: total - paid };
+    return { ...reservation, nights, roomTotal, consumptionsTotal, total, paid, balance: total - paid };
   }
 
   async list(hotelId: string, query: ListReservationsQuery) {
@@ -127,7 +137,7 @@ export class ReservationsService {
           checkInDate: checkIn,
           checkOutDate: checkOut,
           guestsCount: dto.guestsCount ?? 1,
-          channel: dto.channel ?? 'directo',
+          channelId: dto.channelId,
           agreedPricePerNight: dto.agreedPricePerNight,
           notes: dto.notes,
           createdById: userId,
@@ -169,7 +179,7 @@ export class ReservationsService {
           checkInDate: checkIn,
           checkOutDate: checkOut,
           guestsCount: dto.guestsCount,
-          channel: dto.channel,
+          channelId: dto.channelId,
           agreedPricePerNight: dto.agreedPricePerNight,
           notes: dto.notes,
         },
@@ -238,6 +248,9 @@ export class ReservationsService {
         include: this.include(),
       }),
       this.prisma.room.update({ where: { id: existing.roomId }, data: { status: RoomStatus.LIMPIEZA } }),
+      this.prisma.housekeepingTask.create({
+        data: { hotelId, roomId: existing.roomId, notes: `Check-out de ${existing.titularGuest?.firstName ?? ''} ${existing.titularGuest?.lastName ?? ''}`.trim() },
+      }),
     ]);
 
     await this.audit.log({ hotelId, userId, action: 'reservation.checkout', entityType: 'Reservation', entityId: id, before: { status: existing.status, balance }, after: { status: updated.status } });

@@ -24,7 +24,7 @@ export class UpdateReservationDto {
 
   @IsOptional()
   @IsString()
-  channel?: string;
+  channelId?: string;
 
   @IsOptional()
   @IsNumber()

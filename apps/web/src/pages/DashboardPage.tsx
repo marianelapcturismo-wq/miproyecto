@@ -44,6 +44,9 @@ export function DashboardPage() {
         <KpiCard label="Fuera de servicio" value={occupancy.outOfServiceRooms} />
         <KpiCard label="Reservas pendientes" value={data.pendingReservations} sub="Consultas y pre-reservas" />
         <KpiCard label="Llegadas próx. 7 días" value={data.arrivalsNext7Days} />
+        <KpiCard label="Tareas housekeeping" value={data.pendingHousekeepingTasks} tone={data.pendingHousekeepingTasks > 0 ? 'warning' : 'default'} />
+        <KpiCard label="Incidencias mantenimiento" value={data.pendingMaintenanceTasks} tone={data.pendingMaintenanceTasks > 0 ? 'warning' : 'default'} />
+        <KpiCard label="Caja" value={data.cashSessionOpen ? 'Abierta' : 'Cerrada'} tone={data.cashSessionOpen ? 'success' : 'warning'} />
       </div>
 
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">

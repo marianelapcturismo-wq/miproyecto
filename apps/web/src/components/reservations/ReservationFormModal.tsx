@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, apiErrorMessage } from '../../lib/api';
-import { RatePlan, Room, RoomType } from '../../lib/types';
+import { Channel, RatePlan, Room, RoomType } from '../../lib/types';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { FormField, inputClass } from '../ui/FormField';
@@ -18,7 +18,8 @@ interface Props {
 export function ReservationFormModal({ onClose, onCreated, defaultRoomId, defaultCheckIn }: Props) {
   const queryClient = useQueryClient();
   const { data: roomTypes } = useQuery({ queryKey: ['room-types'], queryFn: async () => (await api.get<RoomType[]>('/room-types')).data });
-  const { data: ratePlans } = useQuery({ queryKey: ['rate-plans'], queryFn: async () => (await api.get<RatePlan[]>('/rate-plans')).data });
+  const { data: ratePlans } = useQuery({ queryKey: ['rate-plans'], queryFn: async () => (await api.get<RatePlan[]>('/rate-plans', { params: { activeOnly: 'true' } })).data });
+  const { data: channels } = useQuery({ queryKey: ['channels'], queryFn: async () => (await api.get<Channel[]>('/channels')).data });
 
   const today = toDateInputValue(new Date());
   const [roomTypeId, setRoomTypeId] = useState('');
@@ -27,7 +28,7 @@ export function ReservationFormModal({ onClose, onCreated, defaultRoomId, defaul
   const [roomId, setRoomId] = useState(defaultRoomId ?? '');
   const [ratePlanId, setRatePlanId] = useState('');
   const [guestsCount, setGuestsCount] = useState(1);
-  const [channel, setChannel] = useState('directo');
+  const [channelId, setChannelId] = useState('');
   const [notes, setNotes] = useState('');
   const [price, setPrice] = useState(0);
   const [guest, setGuest] = useState<{ id: string; label: string } | null>(null);
@@ -58,6 +59,13 @@ export function ReservationFormModal({ onClose, onCreated, defaultRoomId, defaul
     if (rt) setPrice(Number(rt.basePrice));
   }, [roomTypeId, roomTypes]);
 
+  useEffect(() => {
+    if (!channelId && channels && channels.length > 0) {
+      const directo = channels.find((c) => c.code === 'DIRECTO');
+      setChannelId(directo?.id ?? channels[0].id);
+    }
+  }, [channels, channelId]);
+
   const create = useMutation({
     mutationFn: async () =>
       api.post('/reservations', {
@@ -67,7 +75,7 @@ export function ReservationFormModal({ onClose, onCreated, defaultRoomId, defaul
         checkInDate,
         checkOutDate,
         guestsCount,
-        channel,
+        channelId,
         agreedPricePerNight: price,
         notes: notes || undefined,
       }),
@@ -79,7 +87,7 @@ export function ReservationFormModal({ onClose, onCreated, defaultRoomId, defaul
     onError: (e) => setError(apiErrorMessage(e)),
   });
 
-  const canSubmit = guest && roomId && checkInDate && checkOutDate > checkInDate && price >= 0;
+  const canSubmit = guest && roomId && channelId && checkInDate && checkOutDate > checkInDate && price >= 0;
 
   return (
     <Modal title="Nueva reserva" onClose={onClose} width="max-w-2xl">
@@ -165,13 +173,12 @@ export function ReservationFormModal({ onClose, onCreated, defaultRoomId, defaul
             <input type="number" min={1} className={inputClass} value={guestsCount} onChange={(e) => setGuestsCount(Number(e.target.value))} />
           </FormField>
           <FormField label="Canal de venta">
-            <select className={inputClass} value={channel} onChange={(e) => setChannel(e.target.value)}>
-              <option value="directo">Directo</option>
-              <option value="web">Web</option>
-              <option value="whatsapp">WhatsApp</option>
-              <option value="booking">Booking</option>
-              <option value="expedia">Expedia</option>
-              <option value="agencia">Agencia</option>
+            <select className={inputClass} value={channelId} onChange={(e) => setChannelId(e.target.value)} required>
+              {channels?.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                </option>
+              ))}
             </select>
           </FormField>
         </div>

@@ -4,7 +4,18 @@
  * distintos estados (pasadas, en curso, futuras, canceladas) para poder
  * validar disponibilidad, calendario, check-in/out, pagos y KPIs.
  */
-import { PrismaClient, RoomStatus, ReservationStatus, PaymentMethod, PaymentType } from '@prisma/client';
+import {
+  PrismaClient,
+  RoomStatus,
+  ReservationStatus,
+  PaymentMethod,
+  PaymentType,
+  ServiceCategory,
+  CashMovementType,
+  HousekeepingStatus,
+  MaintenancePriority,
+  MaintenanceStatus,
+} from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -35,6 +46,18 @@ const PERMISSIONS = [
   ['payments.view', 'Ver pagos'],
   ['payments.create', 'Registrar pagos'],
   ['users.manage', 'Administrar usuarios y roles'],
+  ['services.view', 'Ver catálogo de servicios'],
+  ['services.manage', 'Crear/editar servicios'],
+  ['consumptions.create', 'Cargar consumos a una reserva'],
+  ['cash.view', 'Ver caja'],
+  ['cash.manage', 'Abrir/cerrar caja y registrar movimientos'],
+  ['housekeeping.view', 'Ver tareas de housekeeping'],
+  ['housekeeping.manage', 'Gestionar tareas de housekeeping'],
+  ['maintenance.view', 'Ver tareas de mantenimiento'],
+  ['maintenance.manage', 'Gestionar tareas de mantenimiento'],
+  ['rates.manage', 'Administrar planes de tarifa y precios'],
+  ['channels.view', 'Ver canales de venta'],
+  ['channels.manage', 'Administrar canales de venta'],
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -48,6 +71,13 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'roomtypes.view',
     'roomtypes.manage',
     'payments.view',
+    'services.view',
+    'cash.view',
+    'housekeeping.view',
+    'maintenance.view',
+    'rates.manage',
+    'channels.view',
+    'channels.manage',
   ],
   RECEPCION: [
     'dashboard.view',
@@ -63,9 +93,14 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'roomtypes.view',
     'payments.view',
     'payments.create',
+    'services.view',
+    'consumptions.create',
+    'cash.view',
+    'cash.manage',
+    'channels.view',
   ],
-  HOUSEKEEPING: ['dashboard.view', 'rooms.view', 'rooms.status.update'],
-  MANTENIMIENTO: ['dashboard.view', 'rooms.view', 'rooms.status.update'],
+  HOUSEKEEPING: ['dashboard.view', 'rooms.view', 'rooms.status.update', 'housekeeping.view', 'housekeeping.manage'],
+  MANTENIMIENTO: ['dashboard.view', 'rooms.view', 'rooms.status.update', 'maintenance.view', 'maintenance.manage'],
 };
 
 async function main() {
@@ -114,6 +149,24 @@ async function main() {
       timezone: 'America/Argentina/Buenos_Aires',
     },
   });
+
+  console.log('Creando canales de venta...');
+  const CHANNEL_DEFS = [
+    ['DIRECTO', 'Directo', 0],
+    ['WEB', 'Web', 0],
+    ['WHATSAPP', 'WhatsApp', 0],
+    ['BOOKING', 'Booking.com', 15],
+    ['EXPEDIA', 'Expedia', 18],
+    ['AGENCIA', 'Agencia de viajes', 10],
+    ['EMPRESA', 'Empresa', 0],
+    ['OTRO', 'Otro', 0],
+  ] as const;
+  const channels = await Promise.all(
+    CHANNEL_DEFS.map(([code, name, commissionPct]) =>
+      prisma.channel.create({ data: { hotelId: hotel.id, code, name, commissionPct } }),
+    ),
+  );
+  const channelByCode = Object.fromEntries(channels.map((c) => [c.code, c.id]));
 
   const roleByCode = Object.fromEntries(roles.map((r) => [r.code, r.id]));
   const passwordHash = await bcrypt.hash('Demo1234!', 10);
@@ -196,6 +249,19 @@ async function main() {
     });
   }
 
+  console.log('Creando catálogo de servicios...');
+  const SERVICE_DEFS: Array<{ name: string; category: ServiceCategory; price: number }> = [
+    { name: 'Desayuno buffet', category: ServiceCategory.DESAYUNO, price: 6000 },
+    { name: 'Cena restaurante', category: ServiceCategory.RESTAURANTE, price: 18000 },
+    { name: 'Bebida bar', category: ServiceCategory.BAR, price: 4500 },
+    { name: 'Minibar', category: ServiceCategory.MINIBAR, price: 5500 },
+    { name: 'Estacionamiento por noche', category: ServiceCategory.ESTACIONAMIENTO, price: 3000 },
+    { name: 'Servicio de lavandería', category: ServiceCategory.LAVANDERIA, price: 8000 },
+    { name: 'Excursión al lago', category: ServiceCategory.EXCURSION, price: 25000 },
+  ];
+  const services = await Promise.all(SERVICE_DEFS.map((s) => prisma.service.create({ data: { hotelId: hotel.id, ...s } })));
+  const serviceByName = Object.fromEntries(services.map((s) => [s.name, s]));
+
   console.log('Creando huéspedes...');
   const guestDefs = [
     { firstName: 'Juan', lastName: 'Pérez', documentNumber: '30111222', nationality: 'Argentina', phone: '+54 9 11 4000-1111', email: 'juan.perez@example.com' },
@@ -222,7 +288,7 @@ async function main() {
     checkIn: Date;
     checkOut: Date;
     status: ReservationStatus;
-    channel: string;
+    channelCode: string;
     pricePerNight: number;
     ratePlanId: string;
     payments?: Array<{ amount: number; method: PaymentMethod; type: PaymentType }>;
@@ -232,33 +298,34 @@ async function main() {
 
   const reservationDefs: ResDef[] = [
     // Estadías pasadas ya cerradas (para que haya historia/KPIs)
-    { room: '201', guest: 0, checkIn: addDays(today, -10), checkOut: addDays(today, -7), status: ReservationStatus.CHECK_OUT, channel: 'directo', pricePerNight: 45000, ratePlanId: ratePlanEstandar.id, markCheckedIn: true, markCheckedOut: true, payments: [{ amount: 135000, method: PaymentMethod.TRANSFERENCIA, type: PaymentType.FINAL }] },
-    { room: '301', guest: 1, checkIn: addDays(today, -6), checkOut: addDays(today, -3), status: ReservationStatus.CHECK_OUT, channel: 'booking', pricePerNight: 58000, ratePlanId: ratePlanEstandar.id, markCheckedIn: true, markCheckedOut: true, payments: [{ amount: 174000, method: PaymentMethod.TARJETA, type: PaymentType.FINAL }] },
-    { room: '101', guest: 2, checkIn: addDays(today, -5), checkOut: addDays(today, -2), status: ReservationStatus.NO_SHOW, channel: 'whatsapp', pricePerNight: 30000, ratePlanId: ratePlanNoReembolsable.id },
+    { room: '201', guest: 0, checkIn: addDays(today, -10), checkOut: addDays(today, -7), status: ReservationStatus.CHECK_OUT, channelCode: 'DIRECTO', pricePerNight: 45000, ratePlanId: ratePlanEstandar.id, markCheckedIn: true, markCheckedOut: true, payments: [{ amount: 135000, method: PaymentMethod.TRANSFERENCIA, type: PaymentType.FINAL }] },
+    { room: '301', guest: 1, checkIn: addDays(today, -6), checkOut: addDays(today, -3), status: ReservationStatus.CHECK_OUT, channelCode: 'BOOKING', pricePerNight: 58000, ratePlanId: ratePlanEstandar.id, markCheckedIn: true, markCheckedOut: true, payments: [{ amount: 174000, method: PaymentMethod.TARJETA, type: PaymentType.FINAL }] },
+    { room: '101', guest: 2, checkIn: addDays(today, -5), checkOut: addDays(today, -2), status: ReservationStatus.NO_SHOW, channelCode: 'WHATSAPP', pricePerNight: 30000, ratePlanId: ratePlanNoReembolsable.id },
 
     // En curso ahora mismo (huésped alojado)
-    { room: '202', guest: 3, checkIn: addDays(today, -2), checkOut: addDays(today, 2), status: ReservationStatus.CHECK_IN, channel: 'directo', pricePerNight: 45000, ratePlanId: ratePlanEstandar.id, markCheckedIn: true, payments: [{ amount: 90000, method: PaymentMethod.EFECTIVO, type: PaymentType.PARCIAL }] },
-    { room: '401', guest: 4, checkIn: addDays(today, -1), checkOut: addDays(today, 3), status: ReservationStatus.CHECK_IN, channel: 'agencia', pricePerNight: 85000, ratePlanId: ratePlanEstandar.id, markCheckedIn: true, payments: [{ amount: 170000, method: PaymentMethod.TRANSFERENCIA, type: PaymentType.PARCIAL }] },
-    { room: '302', guest: 5, checkIn: today, checkOut: addDays(today, 4), status: ReservationStatus.CHECK_IN, channel: 'directo', pricePerNight: 58000, ratePlanId: ratePlanEstandar.id, markCheckedIn: true },
+    { room: '202', guest: 3, checkIn: addDays(today, -2), checkOut: addDays(today, 2), status: ReservationStatus.CHECK_IN, channelCode: 'DIRECTO', pricePerNight: 45000, ratePlanId: ratePlanEstandar.id, markCheckedIn: true, payments: [{ amount: 90000, method: PaymentMethod.EFECTIVO, type: PaymentType.PARCIAL }] },
+    { room: '401', guest: 4, checkIn: addDays(today, -1), checkOut: addDays(today, 3), status: ReservationStatus.CHECK_IN, channelCode: 'AGENCIA', pricePerNight: 85000, ratePlanId: ratePlanEstandar.id, markCheckedIn: true, payments: [{ amount: 170000, method: PaymentMethod.TRANSFERENCIA, type: PaymentType.PARCIAL }] },
+    { room: '302', guest: 5, checkIn: today, checkOut: addDays(today, 4), status: ReservationStatus.CHECK_IN, channelCode: 'DIRECTO', pricePerNight: 58000, ratePlanId: ratePlanEstandar.id, markCheckedIn: true },
 
     // Check-in previsto para hoy (recepción debe procesarlo)
-    { room: '203', guest: 6, checkIn: today, checkOut: addDays(today, 3), status: ReservationStatus.CONFIRMADA, channel: 'directo', pricePerNight: 45000, ratePlanId: ratePlanEstandar.id, payments: [{ amount: 45000, method: PaymentMethod.TRANSFERENCIA, type: PaymentType.SENA }] },
+    { room: '203', guest: 6, checkIn: today, checkOut: addDays(today, 3), status: ReservationStatus.CONFIRMADA, channelCode: 'DIRECTO', pricePerNight: 45000, ratePlanId: ratePlanEstandar.id, payments: [{ amount: 45000, method: PaymentMethod.TRANSFERENCIA, type: PaymentType.SENA }] },
 
     // Check-out previsto para hoy
-    { room: '204', guest: 7, checkIn: addDays(today, -3), checkOut: today, status: ReservationStatus.CHECK_IN, channel: 'booking', pricePerNight: 45000, ratePlanId: ratePlanEstandar.id, markCheckedIn: true, payments: [{ amount: 135000, method: PaymentMethod.TARJETA, type: PaymentType.FINAL }] },
+    { room: '204', guest: 7, checkIn: addDays(today, -3), checkOut: today, status: ReservationStatus.CHECK_IN, channelCode: 'BOOKING', pricePerNight: 45000, ratePlanId: ratePlanEstandar.id, markCheckedIn: true, payments: [{ amount: 135000, method: PaymentMethod.TARJETA, type: PaymentType.FINAL }] },
 
     // Futuras confirmadas / pre-reservas / consultas (para calendario y forecast)
-    { room: '206', guest: 8, checkIn: addDays(today, 3), checkOut: addDays(today, 6), status: ReservationStatus.CONFIRMADA, channel: 'expedia', pricePerNight: 45000, ratePlanId: ratePlanEstandar.id },
-    { room: '303', guest: 9, checkIn: addDays(today, 5), checkOut: addDays(today, 9), status: ReservationStatus.PRE_RESERVA, channel: 'whatsapp', pricePerNight: 58000, ratePlanId: ratePlanNoReembolsable.id },
-    { room: '402', guest: 0, checkIn: addDays(today, 8), checkOut: addDays(today, 12), status: ReservationStatus.CONFIRMADA, channel: 'directo', pricePerNight: 85000, ratePlanId: ratePlanEstandar.id, payments: [{ amount: 85000, method: PaymentMethod.EFECTIVO, type: PaymentType.SENA }] },
-    { room: '102', guest: 1, checkIn: addDays(today, 15), checkOut: addDays(today, 17), status: ReservationStatus.CONSULTA, channel: 'web', pricePerNight: 30000, ratePlanId: ratePlanEstandar.id },
-    { room: '201', guest: 2, checkIn: addDays(today, 20), checkOut: addDays(today, 23), status: ReservationStatus.CONFIRMADA, channel: 'directo', pricePerNight: 45000, ratePlanId: ratePlanEstandar.id },
+    { room: '206', guest: 8, checkIn: addDays(today, 3), checkOut: addDays(today, 6), status: ReservationStatus.CONFIRMADA, channelCode: 'EXPEDIA', pricePerNight: 45000, ratePlanId: ratePlanEstandar.id },
+    { room: '303', guest: 9, checkIn: addDays(today, 5), checkOut: addDays(today, 9), status: ReservationStatus.PRE_RESERVA, channelCode: 'WHATSAPP', pricePerNight: 58000, ratePlanId: ratePlanNoReembolsable.id },
+    { room: '402', guest: 0, checkIn: addDays(today, 8), checkOut: addDays(today, 12), status: ReservationStatus.CONFIRMADA, channelCode: 'DIRECTO', pricePerNight: 85000, ratePlanId: ratePlanEstandar.id, payments: [{ amount: 85000, method: PaymentMethod.EFECTIVO, type: PaymentType.SENA }] },
+    { room: '102', guest: 1, checkIn: addDays(today, 15), checkOut: addDays(today, 17), status: ReservationStatus.CONSULTA, channelCode: 'WEB', pricePerNight: 30000, ratePlanId: ratePlanEstandar.id },
+    { room: '201', guest: 2, checkIn: addDays(today, 20), checkOut: addDays(today, 23), status: ReservationStatus.CONFIRMADA, channelCode: 'DIRECTO', pricePerNight: 45000, ratePlanId: ratePlanEstandar.id },
 
     // Cancelada (no debe contar como ocupación)
-    { room: '103', guest: 3, checkIn: addDays(today, 2), checkOut: addDays(today, 4), status: ReservationStatus.CANCELADA, channel: 'directo', pricePerNight: 30000, ratePlanId: ratePlanEstandar.id },
+    { room: '103', guest: 3, checkIn: addDays(today, 2), checkOut: addDays(today, 4), status: ReservationStatus.CANCELADA, channelCode: 'DIRECTO', pricePerNight: 30000, ratePlanId: ratePlanEstandar.id },
   ];
 
   console.log('Creando reservas de prueba...');
+  const reservationByRoom: Record<string, { id: string }> = {};
   for (const def of reservationDefs) {
     const room = roomByNumber[def.room];
     const guest = guests[def.guest];
@@ -272,13 +339,14 @@ async function main() {
         checkOutDate: def.checkOut,
         guestsCount: 1,
         status: def.status,
-        channel: def.channel,
+        channelId: channelByCode[def.channelCode],
         agreedPricePerNight: def.pricePerNight,
         createdById: recepcion.id,
         actualCheckInAt: def.markCheckedIn ? def.checkIn : null,
         actualCheckOutAt: def.markCheckedOut ? def.checkOut : null,
       },
     });
+    reservationByRoom[def.room] = reservation;
     await prisma.reservationGuest.create({ data: { reservationId: reservation.id, guestId: guest.id, isTitular: true } });
     if (def.payments) {
       for (const p of def.payments) {
@@ -292,6 +360,59 @@ async function main() {
   // Estados de habitación coherentes con las reservas activas
   const occupiedRoomNumbers = ['202', '401', '302', '204'];
   await prisma.room.updateMany({ where: { hotelId: hotel.id, number: { in: occupiedRoomNumbers } }, data: { status: RoomStatus.OCUPADA } });
+
+  console.log('Cargando consumos de ejemplo...');
+  const consumptionDefs = [
+    { room: '202', service: 'Desayuno buffet', quantity: 3 },
+    { room: '202', service: 'Minibar', quantity: 1 },
+    { room: '401', service: 'Cena restaurante', quantity: 2 },
+    { room: '401', service: 'Excursión al lago', quantity: 2 },
+    { room: '302', service: 'Bebida bar', quantity: 4 },
+  ];
+  for (const c of consumptionDefs) {
+    const service = serviceByName[c.service];
+    await prisma.consumption.create({
+      data: {
+        hotelId: hotel.id,
+        reservationId: reservationByRoom[c.room].id,
+        serviceId: service.id,
+        quantity: c.quantity,
+        unitPrice: service.price,
+        registeredById: recepcion.id,
+      },
+    });
+  }
+
+  console.log('Abriendo caja del día con movimientos de ejemplo...');
+  const cashSession = await prisma.cashSession.create({
+    data: { hotelId: hotel.id, openedById: recepcion.id, openingAmount: 50000 },
+  });
+  await prisma.cashMovement.createMany({
+    data: [
+      { hotelId: hotel.id, cashSessionId: cashSession.id, type: CashMovementType.INGRESO, concept: 'Seña reserva Torres, Diego', amount: 45000, method: PaymentMethod.TRANSFERENCIA, registeredById: recepcion.id },
+      { hotelId: hotel.id, cashSessionId: cashSession.id, type: CashMovementType.INGRESO, concept: 'Pago parcial reserva Martínez, Ana', amount: 90000, method: PaymentMethod.EFECTIVO, registeredById: recepcion.id },
+      { hotelId: hotel.id, cashSessionId: cashSession.id, type: CashMovementType.EGRESO, concept: 'Compra insumos de limpieza', amount: 12000, method: PaymentMethod.EFECTIVO, registeredById: recepcion.id },
+    ],
+  });
+
+  console.log('Creando tareas de housekeeping y mantenimiento...');
+  await prisma.housekeepingTask.createMany({
+    data: [
+      { hotelId: hotel.id, roomId: roomByNumber['204'].id, status: HousekeepingStatus.PENDIENTE, assignedToId: housekeeping.id, notes: 'Check-out del día, preparar para próximo huésped.' },
+      { hotelId: hotel.id, roomId: roomByNumber['205'].id, status: HousekeepingStatus.EN_PROCESO, assignedToId: housekeeping.id },
+    ],
+  });
+  await prisma.maintenanceTask.create({
+    data: {
+      hotelId: hotel.id,
+      roomId: roomByNumber['104'].id,
+      issue: 'Pérdida de agua en el baño',
+      priority: MaintenancePriority.ALTA,
+      status: MaintenanceStatus.EN_PROCESO,
+      assignedToId: mantenimiento.id,
+      notes: 'Se avisó al plomero, espera repuesto.',
+    },
+  });
 
   console.log('Seed completado.');
   console.log('Usuarios de prueba (password: Demo1234!):');
