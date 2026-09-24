@@ -32,6 +32,11 @@ export function ReservationDetailPage() {
     queryClient.invalidateQueries({ queryKey: ['rooms'] });
   };
 
+  const confirm = useMutation({
+    mutationFn: async () => api.post(`/reservations/${id}/confirm`),
+    onSuccess: invalidate,
+    onError: (e) => setActionError(apiErrorMessage(e)),
+  });
   const checkin = useMutation({
     mutationFn: async () => api.post(`/reservations/${id}/checkin`),
     onSuccess: invalidate,
@@ -50,6 +55,7 @@ export function ReservationDetailPage() {
 
   if (isLoading || !reservation) return <p className="text-sm text-slate-400">Cargando...</p>;
 
+  const canConfirm = hasPermission('reservations.update') && ['CONSULTA', 'PRE_RESERVA'].includes(reservation.status);
   const canCheckin = hasPermission('reservations.checkin') && ['CONFIRMADA', 'PRE_RESERVA'].includes(reservation.status);
   const canCheckout = hasPermission('reservations.checkout') && reservation.status === 'CHECK_IN';
   const canCancel = hasPermission('reservations.cancel') && !['CHECK_OUT', 'CANCELADA'].includes(reservation.status);
@@ -78,6 +84,11 @@ export function ReservationDetailPage() {
       {actionError && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{actionError}</p>}
 
       <div className="flex flex-wrap gap-2">
+        {canConfirm && (
+          <Button onClick={() => confirm.mutate()} disabled={confirm.isPending}>
+            Confirmar reserva
+          </Button>
+        )}
         {canCheckin && (
           <Button onClick={() => checkin.mutate()} disabled={checkin.isPending}>
             Realizar check-in
@@ -187,7 +198,9 @@ export function ReservationDetailPage() {
             </div>
             <div className="flex justify-between border-t border-slate-100 pt-2 font-semibold">
               <dt className="text-slate-700">Saldo</dt>
-              <dd className={reservation.balance > 0 ? 'text-red-600' : 'text-emerald-600'}>{formatCurrency(reservation.balance, user?.hotel.currency)}</dd>
+              <dd data-testid="reservation-balance" className={reservation.balance > 0 ? 'text-red-600' : 'text-emerald-600'}>
+                {formatCurrency(reservation.balance, user?.hotel.currency)}
+              </dd>
             </div>
           </dl>
         </Card>

@@ -47,6 +47,12 @@ export class ReservationsController {
     return this.reservations.update(user.hotelId, id, dto, user.id);
   }
 
+  @RequirePermissions('reservations.update')
+  @Post(':id/confirm')
+  confirm(@CurrentUser() user: RequestUser, @Param('id') id: string) {
+    return this.reservations.confirm(user.hotelId, id, user.id);
+  }
+
   @RequirePermissions('reservations.cancel')
   @Post(':id/cancel')
   cancel(@CurrentUser() user: RequestUser, @Param('id') id: string, @Body('reason') reason?: string) {

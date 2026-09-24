@@ -18,7 +18,15 @@ export function GuestPicker({ value, onChange }: { value: { id: string; label: s
     return (
       <div className="flex items-center justify-between rounded-lg border border-slate-300 px-3 py-2 text-sm">
         <span>{value.label}</span>
-        <button type="button" onClick={() => onChange(null)} className="text-xs text-brand-600 hover:underline">
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onChange(null);
+          }}
+          className="text-xs text-brand-600 hover:underline"
+        >
           Cambiar
         </button>
       </div>
@@ -45,7 +53,11 @@ export function GuestPicker({ value, onChange }: { value: { id: string; label: s
               key={g.id}
               type="button"
               className="block w-full px-3 py-2 text-left text-sm hover:bg-slate-50"
-              onClick={() => {
+              onClick={(e) => {
+                // Sin stopPropagation, el click burbujea hasta el <label> de FormField, que
+                // reenvía un click implícito al input de búsqueda y pisa esta selección.
+                e.preventDefault();
+                e.stopPropagation();
                 onChange({ id: g.id, label: `${g.lastName}, ${g.firstName} (${g.documentNumber})` });
                 setOpen(false);
               }}

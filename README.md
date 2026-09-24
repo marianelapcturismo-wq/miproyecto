@@ -41,6 +41,11 @@ Implementado y probado end-to-end:
 
 Datos de prueba realistas (seed) para poder probar todo el flujo de punta a punta, incluyendo ~60 días de historial de reservas para que las series y comparaciones de KPIs tengan datos reales.
 
+**Repaso de cierre — seguridad, tests y validación**
+- Revisión de seguridad de todo el código: se encontró y corrigió una vulnerabilidad real de aislamiento multi-tenant (`create()`/`update()` de reservas no validaban que habitación/plan de tarifa/canal pertenecieran al hotel del usuario autenticado), con tests de regresión dedicados.
+- Se agregó el estado `CONSULTA`/`PRE_RESERVA` con una acción explícita `confirm()` para pasar a `CONFIRMADA` (antes no existía ese camino).
+- Tests automatizados en las tres capas: backend (Jest, unitarios + integración contra Postgres real), frontend (Vitest + Testing Library) y un test end-to-end (Playwright) que cubre el flujo crítico completo: login → crear reserva → check-in → pago → check-out.
+
 ## Stack
 
 - **Backend**: NestJS + TypeScript, Prisma ORM, PostgreSQL, JWT (passport-jwt)
@@ -69,6 +74,19 @@ npm run prisma:seed
 # 4. Levantar backend y frontend (en dos terminales)
 npm run dev:api      # http://localhost:3001/api
 npm run dev:web       # http://localhost:5173
+```
+
+### Cómo correr los tests
+
+```bash
+# Backend: tests unitarios (puros) + de integración contra la DB local
+cd apps/api && npm test
+
+# Frontend: tests unitarios de componentes/utilidades
+cd apps/web && npm test
+
+# End-to-end (Playwright): requiere Postgres + API + frontend corriendo
+cd apps/web && npm run test:e2e
 ```
 
 ### Usuarios de prueba (password: `Demo1234!`)

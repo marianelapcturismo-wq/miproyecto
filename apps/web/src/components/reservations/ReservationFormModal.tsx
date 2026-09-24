@@ -29,6 +29,7 @@ export function ReservationFormModal({ onClose, onCreated, defaultRoomId, defaul
   const [ratePlanId, setRatePlanId] = useState('');
   const [guestsCount, setGuestsCount] = useState(1);
   const [channelId, setChannelId] = useState('');
+  const [status, setStatus] = useState<'CONSULTA' | 'PRE_RESERVA' | 'CONFIRMADA'>('CONFIRMADA');
   const [notes, setNotes] = useState('');
   const [price, setPrice] = useState(0);
   const [guest, setGuest] = useState<{ id: string; label: string } | null>(null);
@@ -76,6 +77,7 @@ export function ReservationFormModal({ onClose, onCreated, defaultRoomId, defaul
         checkOutDate,
         guestsCount,
         channelId,
+        status,
         agreedPricePerNight: price,
         notes: notes || undefined,
       }),
@@ -182,6 +184,14 @@ export function ReservationFormModal({ onClose, onCreated, defaultRoomId, defaul
             </select>
           </FormField>
         </div>
+
+        <FormField label="Estado inicial">
+          <select className={inputClass} value={status} onChange={(e) => setStatus(e.target.value as typeof status)}>
+            <option value="CONFIRMADA">Confirmada</option>
+            <option value="PRE_RESERVA">Pre-reserva</option>
+            <option value="CONSULTA">Consulta</option>
+          </select>
+        </FormField>
 
         <FormField label="Observaciones">
           <textarea className={inputClass} rows={2} value={notes} onChange={(e) => setNotes(e.target.value)} />

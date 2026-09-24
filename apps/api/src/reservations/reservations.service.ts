@@ -13,6 +13,13 @@ const ACTIVE_STATUSES: ReservationStatus[] = [
   ReservationStatus.CHECK_IN,
 ];
 
+// CHECK_IN/CHECK_OUT/CANCELADA/NO_SHOW solo se alcanzan a través de sus
+// acciones dedicadas (checkin/checkout/cancel), nunca como estado inicial de
+// creación: cada una de esas acciones hace más que cambiar el status (mueve
+// la habitación, crea tareas de housekeeping, etc.) y saltearlas rompería esa
+// lógica.
+const ALLOWED_INITIAL_STATUSES: ReservationStatus[] = [ReservationStatus.CONSULTA, ReservationStatus.PRE_RESERVA, ReservationStatus.CONFIRMADA];
+
 function nightsBetween(checkIn: Date, checkOut: Date): number {
   const ms = checkOut.getTime() - checkIn.getTime();
   return Math.max(0, Math.round(ms / 86_400_000));
@@ -125,6 +132,19 @@ export class ReservationsService {
     const guest = await this.prisma.guest.findFirst({ where: { id: dto.titularGuestId, hotelId } });
     if (!guest) throw new NotFoundException('Huésped no encontrado');
 
+    const channel = await this.prisma.channel.findFirst({ where: { id: dto.channelId, hotelId } });
+    if (!channel) throw new NotFoundException('Canal no encontrado');
+
+    if (dto.ratePlanId) {
+      const ratePlan = await this.prisma.ratePlan.findFirst({ where: { id: dto.ratePlanId, hotelId } });
+      if (!ratePlan) throw new NotFoundException('Plan de tarifa no encontrado');
+    }
+
+    const status = dto.status ?? ReservationStatus.CONFIRMADA;
+    if (!ALLOWED_INITIAL_STATUSES.includes(status)) {
+      throw new BadRequestException('Estado inicial de reserva inválido.');
+    }
+
     await this.assertRoomAvailable(hotelId, dto.roomId, checkIn, checkOut);
 
     try {
@@ -138,6 +158,7 @@ export class ReservationsService {
           checkOutDate: checkOut,
           guestsCount: dto.guestsCount ?? 1,
           channelId: dto.channelId,
+          status,
           agreedPricePerNight: dto.agreedPricePerNight,
           notes: dto.notes,
           createdById: userId,
@@ -167,6 +188,19 @@ export class ReservationsService {
     const checkOut = dto.checkOutDate ? new Date(dto.checkOutDate) : existing.checkOutDate;
     if (checkOut <= checkIn) throw new BadRequestException('La fecha de salida debe ser posterior a la de entrada.');
 
+    if (dto.roomId) {
+      const room = await this.prisma.room.findFirst({ where: { id: dto.roomId, hotelId } });
+      if (!room) throw new NotFoundException('Habitación no encontrada');
+    }
+    if (dto.ratePlanId) {
+      const ratePlan = await this.prisma.ratePlan.findFirst({ where: { id: dto.ratePlanId, hotelId } });
+      if (!ratePlan) throw new NotFoundException('Plan de tarifa no encontrado');
+    }
+    if (dto.channelId) {
+      const channel = await this.prisma.channel.findFirst({ where: { id: dto.channelId, hotelId } });
+      if (!channel) throw new NotFoundException('Canal no encontrado');
+    }
+
     const roomId = dto.roomId ?? existing.roomId;
     await this.assertRoomAvailable(hotelId, roomId, checkIn, checkOut, id);
 
@@ -193,6 +227,23 @@ export class ReservationsService {
       }
       throw e;
     }
+  }
+
+  async confirm(hotelId: string, id: string, userId: string) {
+    const existing = await this.prisma.reservation.findFirst({ where: { id, hotelId } });
+    if (!existing) throw new NotFoundException('Reserva no encontrada');
+    const allowedForConfirm: ReservationStatus[] = [ReservationStatus.CONSULTA, ReservationStatus.PRE_RESERVA];
+    if (!allowedForConfirm.includes(existing.status)) {
+      throw new BadRequestException('Solo se puede confirmar una reserva en estado consulta o pre-reserva.');
+    }
+
+    const updated = await this.prisma.reservation.update({
+      where: { id },
+      data: { status: ReservationStatus.CONFIRMADA },
+      include: this.include(),
+    });
+    await this.audit.log({ hotelId, userId, action: 'reservation.confirm', entityType: 'Reservation', entityId: id, before: { status: existing.status }, after: { status: updated.status } });
+    return this.withBalance(updated);
   }
 
   async cancel(hotelId: string, id: string, userId: string, reason?: string) {

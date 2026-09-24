@@ -1,4 +1,5 @@
-import { IsDateString, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { IsDateString, IsEnum, IsInt, IsNumber, IsOptional, IsString, Min } from 'class-validator';
+import { ReservationStatus } from '@prisma/client';
 
 export class CreateReservationDto {
   @IsString()
@@ -32,4 +33,9 @@ export class CreateReservationDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  /** Estado inicial (Consulta/Pre-reserva/Confirmada). Por defecto: Confirmada. */
+  @IsOptional()
+  @IsEnum(ReservationStatus)
+  status?: ReservationStatus;
 }
