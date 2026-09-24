@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api, apiErrorMessage } from '../lib/api';
 import { Reservation } from '../lib/types';
@@ -14,7 +14,6 @@ import { ConsumptionFormModal } from '../components/reservations/ConsumptionForm
 export function ReservationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { hasPermission, user } = useAuth();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [showPayment, setShowPayment] = useState(false);
   const [showConsumption, setShowConsumption] = useState(false);

@@ -2,8 +2,10 @@ import { test, expect } from '@playwright/test';
 
 /**
  * Camino crítico de punta a punta: login → crear reserva → check-in →
- * registrar pago → check-out. Usa fechas bien en el futuro (hoy + 200 días)
- * para no chocar con los datos de prueba que carga el seed.
+ * registrar pago → check-out. Usa fechas bien en el futuro para no chocar
+ * con los datos de prueba que carga el seed, con un offset aleatorio para
+ * no chocar tampoco con la reserva de una corrida anterior de este mismo
+ * test contra la misma base (la reserva que crea queda persistida).
  *
  * Requiere la API, la base de datos (con el seed cargado) y el frontend
  * corriendo — ver README.md, sección "Cómo correrlo" — antes de ejecutar
@@ -17,8 +19,9 @@ function isoDate(daysFromToday: number) {
 }
 
 test('ciclo completo de una reserva: crear, check-in, pago y check-out', async ({ page }) => {
-  const checkIn = isoDate(200);
-  const checkOut = isoDate(202);
+  const offset = 200 + Math.floor(Math.random() * 1000);
+  const checkIn = isoDate(offset);
+  const checkOut = isoDate(offset + 2);
 
   await test.step('login como recepción', async () => {
     await page.goto('/login');

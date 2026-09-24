@@ -8,8 +8,8 @@ import { inputClass } from '../components/ui/FormField';
 export function LoginPage() {
   const { user, login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState('recepcion@hotellosalerces.com');
-  const [password, setPassword] = useState('Demo1234!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
