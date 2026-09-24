@@ -34,4 +34,21 @@ export class AuditService {
       },
     });
   }
+
+  list(hotelId: string, filters: { entityType?: string; userId?: string; from?: string; to?: string }) {
+    return this.prisma.auditLog.findMany({
+      where: {
+        hotelId,
+        entityType: filters.entityType,
+        userId: filters.userId,
+        createdAt: {
+          gte: filters.from ? new Date(filters.from) : undefined,
+          lt: filters.to ? new Date(filters.to) : undefined,
+        },
+      },
+      include: { user: { select: { id: true, firstName: true, lastName: true } } },
+      orderBy: { createdAt: 'desc' },
+      take: 200,
+    });
+  }
 }

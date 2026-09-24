@@ -16,6 +16,10 @@ import { HousekeepingPage } from './pages/HousekeepingPage';
 import { MaintenancePage } from './pages/MaintenancePage';
 import { RatesPage } from './pages/RatesPage';
 import { ChannelsPage } from './pages/ChannelsPage';
+import { ManagementDashboardPage } from './pages/ManagementDashboardPage';
+import { ForecastPage } from './pages/ForecastPage';
+import { GoalsPage } from './pages/GoalsPage';
+import { AuditLogPage } from './pages/AuditLogPage';
 
 export default function App() {
   return (
@@ -38,6 +42,10 @@ export default function App() {
           <Route path="/services" element={<ServicesPage />} />
           <Route path="/channels" element={<ChannelsPage />} />
           <Route path="/cash" element={<CashPage />} />
+          <Route path="/management" element={<ManagementDashboardPage />} />
+          <Route path="/forecast" element={<ForecastPage />} />
+          <Route path="/goals" element={<GoalsPage />} />
+          <Route path="/audit" element={<AuditLogPage />} />
         </Route>
       </Route>
       <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -39,6 +39,8 @@ model Hotel {
   housekeepingTasks HousekeepingTask[]
   maintenanceTasks  MaintenanceTask[]
   auditLogs         AuditLog[]
+  dailyMetrics      DailyHotelMetric[]
+  goals             Goal[]
 }
 
 model Role {
@@ -93,6 +95,7 @@ model User {
   housekeepingTasksAssigned HousekeepingTask[] @relation("HousekeepingAssignedTo")
   maintenanceTasksAssigned  MaintenanceTask[]  @relation("MaintenanceAssignedTo")
   auditLogs                 AuditLog[]
+  goalsCreated              Goal[]
 
   @@index([hotelId])
 }
@@ -141,9 +144,10 @@ model RoomType {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
-  hotel Hotel  @relation(fields: [hotelId], references: [id])
-  rooms Room[]
-  rates Rate[]
+  hotel        Hotel              @relation(fields: [hotelId], references: [id])
+  rooms        Room[]
+  rates        Rate[]
+  dailyMetrics DailyHotelMetric[]
 
   @@unique([hotelId, name])
 }
@@ -528,4 +532,58 @@ model AuditLog {
 
   @@index([hotelId, entityType, entityId])
   @@index([hotelId, createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Gestión / BI: agregación diaria de KPIs y objetivos
+// ---------------------------------------------------------------------------
+
+/// Tabla de agregación diaria (hotelId, date, roomTypeId?) — la capa de KPIs
+/// nunca recalcula sobre reservas/pagos en crudo. roomTypeId = null representa
+/// el agregado de todo el hotel. Sin @@unique compuesto porque Postgres trata
+/// NULL como distinto en índices únicos (dos filas con roomTypeId = null no
+/// violarían la constraint); en su lugar, MetricsService recalcula un rango
+/// completo con "borrar e insertar" en una transacción.
+model DailyHotelMetric {
+  id             String   @id @default(cuid())
+  hotelId        String
+  date           DateTime @db.Date
+  roomTypeId     String?
+  totalRooms     Int
+  soldRoomNights Int
+  roomRevenue    Decimal  @db.Decimal(12, 2)
+  otherRevenue   Decimal  @db.Decimal(12, 2)
+  updatedAt      DateTime @updatedAt
+
+  hotel    Hotel     @relation(fields: [hotelId], references: [id])
+  roomType RoomType? @relation(fields: [roomTypeId], references: [id])
+
+  @@index([hotelId, date])
+  @@index([hotelId, roomTypeId, date])
+}
+
+enum GoalMetric {
+  OCUPACION
+  ADR
+  REVPAR
+  INGRESOS
+  CANCELACIONES
+  VENTA_DIRECTA_PCT
+}
+
+model Goal {
+  id          String     @id @default(cuid())
+  hotelId     String
+  metric      GoalMetric
+  periodStart DateTime   @db.Date
+  periodEnd   DateTime   @db.Date
+  targetValue Decimal    @db.Decimal(14, 2)
+  notes       String?
+  createdById String
+  createdAt   DateTime   @default(now())
+
+  hotel     Hotel @relation(fields: [hotelId], references: [id])
+  createdBy User  @relation(fields: [createdById], references: [id])
+
+  @@index([hotelId, metric, periodStart])
 }

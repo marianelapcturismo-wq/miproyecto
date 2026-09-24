@@ -35,6 +35,15 @@ const GROUPS: NavGroup[] = [
       { to: '/cash', label: 'Caja', permission: 'cash.view' },
     ],
   },
+  {
+    label: 'Gestión',
+    items: [
+      { to: '/management', label: 'Dashboard gerencial', permission: 'kpis.view' },
+      { to: '/forecast', label: 'Pronóstico', permission: 'kpis.view' },
+      { to: '/goals', label: 'Objetivos', permission: 'goals.view' },
+      { to: '/audit', label: 'Auditoría', permission: 'audit.view' },
+    ],
+  },
 ];
 
 export function Sidebar({ open, onClose }: { open: boolean; onClose: () => void }) {

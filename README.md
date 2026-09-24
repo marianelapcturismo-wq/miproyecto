@@ -8,7 +8,7 @@ preparada para escalar a múltiples hoteles.
 Ver `docs/01-analisis-arquitectura.md` para el análisis funcional completo,
 las decisiones de arquitectura y el alcance de cada etapa.
 
-## Estado actual: Etapa 4 (Operación) completa
+## Estado actual: Etapa 5 (Gestión / BI) completa
 
 Implementado y probado end-to-end:
 
@@ -31,7 +31,15 @@ Implementado y probado end-to-end:
 - Tarifas: CRUD completo de planes de tarifa y precios vigentes por tipo de habitación y rango de fechas
 - Canales de venta: entidad propia con comisión asociada (reemplaza el campo de texto libre del MVP)
 
-Datos de prueba realistas (seed) para poder probar todo el flujo de punta a punta.
+**Etapa 5 — Gestión / BI**
+- Tabla de agregación diaria (`DailyHotelMetric`, por hotel/día/tipo de habitación) que calcula ocupación, ADR y RevPAR sin recalcular sobre las tablas transaccionales en cada consulta; los días de hoy/ayer se recalculan siempre, la historia cerrada se cachea y un cron nocturno (`@nestjs/schedule`) la cierra definitivamente
+- Dashboard gerencial: ocupación, ADR, RevPAR e ingresos con comparación contra período anterior o mismo período del año anterior (variación absoluta y %), serie diaria graficada, reporte por canal de venta (ingreso bruto/neto según comisión), huéspedes (nuevos vs. recurrentes) y consumos, alertas gerenciales basadas en reglas, exportación a CSV
+- Cada KPI muestra su fórmula al pasar el mouse, y la sección de Rentabilidad (GOP/GOPPAR) explica qué datos faltan en vez de inventar un número
+- Pronóstico a 7/30/90 días (ocupación proyectada, llegadas, salidas, ingresos previstos, fechas de baja demanda) a partir de reservas confirmadas/pre-reservadas
+- Objetivos configurables por período (ocupación, ADR, RevPAR, ingresos, cancelaciones máximas, % venta directa) con progreso real vs. meta
+- Pantalla de auditoría con filtro por tipo de entidad
+
+Datos de prueba realistas (seed) para poder probar todo el flujo de punta a punta, incluyendo ~60 días de historial de reservas para que las series y comparaciones de KPIs tengan datos reales.
 
 ## Stack
 
@@ -94,6 +102,6 @@ Documentadas en detalle en `docs/01-analisis-arquitectura.md`. Las más relevant
 - **Aislamiento por `hotelId` a nivel de aplicación**, no Row-Level Security de Postgres: suficiente para el MVP; RLS es candidato a sumarse cuando el sistema pase a multi-hotel comercial real.
 - **Calendario con creación por click + edición vía formulario**, sin arrastrar-y-soltar reservas todavía (queda como mejora de UX de una próxima etapa).
 
-## Próximos pasos (Etapa 5 en adelante)
+## Próximos pasos (Etapa 6 en adelante)
 
-Dashboard gerencial / BI: KPIs de ocupación, ADR, RevPAR con la tabla de agregación diaria (`daily_hotel_metrics`) pendiente de implementar, comparaciones contra períodos anteriores, objetivos, alertas gerenciales, forecast a 7/30/90 días, reportes exportables y auditoría avanzada — descripto en detalle en el análisis.
+Preparar la arquitectura (sin implementar todavía) para: motor de reservas online, channel manager, WhatsApp/email automáticos, facturación electrónica, medios de pago, multi-hotel comercial, multi-moneda, multi-idioma, CRM, app móvil e integraciones externas — descripto en detalle en el análisis. También queda pendiente el informe gerencial mensual automático y la rentabilidad (GOP/GOPPAR), que requiere primero registrar costos operativos.

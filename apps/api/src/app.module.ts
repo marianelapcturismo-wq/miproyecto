@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { APP_GUARD } from '@nestjs/core';
 import { PrismaModule } from './prisma/prisma.module';
 import { AuditModule } from './audit/audit.module';
@@ -19,10 +20,15 @@ import { MaintenanceModule } from './maintenance/maintenance.module';
 import { ReservationsModule } from './reservations/reservations.module';
 import { PaymentsModule } from './payments/payments.module';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { MetricsModule } from './metrics/metrics.module';
+import { KpisModule } from './kpis/kpis.module';
+import { ForecastModule } from './forecast/forecast.module';
+import { GoalsModule } from './goals/goals.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true, envFilePath: ['../../.env', '.env'] }),
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuditModule,
     AuthModule,
@@ -39,6 +45,10 @@ import { DashboardModule } from './dashboard/dashboard.module';
     ReservationsModule,
     PaymentsModule,
     DashboardModule,
+    MetricsModule,
+    KpisModule,
+    ForecastModule,
+    GoalsModule,
   ],
   providers: [
     { provide: APP_GUARD, useClass: JwtAuthGuard },

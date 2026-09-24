@@ -17,3 +17,19 @@ export function toDateInputValue(date: string | Date) {
   const d = typeof date === 'string' ? new Date(date) : date;
   return d.toISOString().slice(0, 10);
 }
+
+export function startOfTodayUTC() {
+  const d = new Date();
+  d.setUTCHours(0, 0, 0, 0);
+  return d;
+}
+
+export function addDaysUTC(date: Date, days: number) {
+  const d = new Date(date);
+  d.setUTCDate(d.getUTCDate() + days);
+  return d;
+}
+
+export function formatPercent(value: number, digits = 1) {
+  return `${value.toFixed(digits)}%`;
+}

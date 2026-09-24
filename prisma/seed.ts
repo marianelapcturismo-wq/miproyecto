@@ -15,6 +15,7 @@ import {
   HousekeepingStatus,
   MaintenancePriority,
   MaintenanceStatus,
+  GoalMetric,
 } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 
@@ -58,6 +59,10 @@ const PERMISSIONS = [
   ['rates.manage', 'Administrar planes de tarifa y precios'],
   ['channels.view', 'Ver canales de venta'],
   ['channels.manage', 'Administrar canales de venta'],
+  ['kpis.view', 'Ver dashboard gerencial e indicadores'],
+  ['goals.view', 'Ver objetivos del hotel'],
+  ['goals.manage', 'Crear/editar objetivos del hotel'],
+  ['audit.view', 'Ver auditoría del sistema'],
 ] as const;
 
 const ROLE_PERMISSIONS: Record<string, string[]> = {
@@ -78,6 +83,10 @@ const ROLE_PERMISSIONS: Record<string, string[]> = {
     'rates.manage',
     'channels.view',
     'channels.manage',
+    'kpis.view',
+    'goals.view',
+    'goals.manage',
+    'audit.view',
   ],
   RECEPCION: [
     'dashboard.view',
@@ -412,6 +421,104 @@ async function main() {
       assignedToId: mantenimiento.id,
       notes: 'Se avisó al plomero, espera repuesto.',
     },
+  });
+
+  console.log('Generando historial de reservas para series de KPIs (últimos ~60 días)...');
+  function seededRandom(seed: number) {
+    let s = seed;
+    return () => {
+      s = (s * 1103515245 + 12345) & 0x7fffffff;
+      return s / 0x7fffffff;
+    };
+  }
+  const rand = seededRandom(42);
+  const allRooms = Object.values(roomByNumber);
+  const channelCodesList = CHANNEL_DEFS.map(([code]) => code);
+  const historicalPaymentMethods = [PaymentMethod.EFECTIVO, PaymentMethod.TRANSFERENCIA, PaymentMethod.TARJETA];
+  let guestCursor = 0;
+  let channelCursor = 0;
+
+  for (const room of allRooms) {
+    const roomType = roomTypesForRates.find((rt) => rt.id === room.roomTypeId)!;
+    let cursor = -60;
+    while (true) {
+      const nights = 1 + Math.floor(rand() * 3);
+      if (cursor + nights >= -10) break; // no pisar el rango reciente ya sembrado arriba
+
+      const checkIn = addDays(today, cursor);
+      const checkOut = addDays(today, cursor + nights);
+      const roll = rand();
+      const status = roll < 0.08 ? ReservationStatus.CANCELADA : roll < 0.12 ? ReservationStatus.NO_SHOW : ReservationStatus.CHECK_OUT;
+      const isWeekendStay = [checkIn.getUTCDay(), checkOut.getUTCDay()].some((d) => d === 5 || d === 6);
+      const price = Math.round((Number(roomType.basePrice) * (isWeekendStay ? 1.15 : 1)) / 100) * 100;
+
+      const guest = guests[guestCursor % guests.length];
+      guestCursor++;
+      const channelCode = channelCodesList[channelCursor % channelCodesList.length];
+      channelCursor++;
+
+      const reservation = await prisma.reservation.create({
+        data: {
+          hotelId: hotel.id,
+          titularGuestId: guest.id,
+          roomId: room.id,
+          ratePlanId: ratePlanEstandar.id,
+          checkInDate: checkIn,
+          checkOutDate: checkOut,
+          guestsCount: 1,
+          status,
+          channelId: channelByCode[channelCode],
+          agreedPricePerNight: price,
+          createdById: recepcion.id,
+          createdAt: addDays(checkIn, -(1 + Math.floor(rand() * 20))),
+          actualCheckInAt: status === ReservationStatus.CHECK_OUT ? checkIn : null,
+          actualCheckOutAt: status === ReservationStatus.CHECK_OUT ? checkOut : null,
+        },
+      });
+      await prisma.reservationGuest.create({ data: { reservationId: reservation.id, guestId: guest.id, isTitular: true } });
+
+      if (status === ReservationStatus.CHECK_OUT) {
+        await prisma.payment.create({
+          data: {
+            hotelId: hotel.id,
+            reservationId: reservation.id,
+            amount: price * nights,
+            method: historicalPaymentMethods[Math.floor(rand() * historicalPaymentMethods.length)],
+            type: PaymentType.FINAL,
+            registeredById: recepcion.id,
+            createdAt: checkOut,
+          },
+        });
+        if (rand() < 0.4) {
+          const service = services[Math.floor(rand() * services.length)];
+          await prisma.consumption.create({
+            data: {
+              hotelId: hotel.id,
+              reservationId: reservation.id,
+              serviceId: service.id,
+              quantity: 1 + Math.floor(rand() * 3),
+              unitPrice: service.price,
+              date: addDays(checkIn, Math.floor(rand() * nights)),
+              registeredById: recepcion.id,
+            },
+          });
+        }
+      }
+
+      cursor += nights + Math.floor(rand() * 3);
+    }
+  }
+
+  console.log('Creando objetivos de ejemplo...');
+  const monthStart = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), 1));
+  const monthEnd = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 0));
+  await prisma.goal.createMany({
+    data: [
+      { hotelId: hotel.id, metric: GoalMetric.OCUPACION, periodStart: monthStart, periodEnd: monthEnd, targetValue: 65, createdById: admin.id, notes: 'Objetivo de ocupación mensual' },
+      { hotelId: hotel.id, metric: GoalMetric.ADR, periodStart: monthStart, periodEnd: monthEnd, targetValue: 48000, createdById: admin.id, notes: 'Tarifa promedio diaria objetivo' },
+      { hotelId: hotel.id, metric: GoalMetric.INGRESOS, periodStart: monthStart, periodEnd: monthEnd, targetValue: 2500000, createdById: admin.id, notes: 'Ingresos totales del mes (alojamiento + consumos)' },
+      { hotelId: hotel.id, metric: GoalMetric.CANCELACIONES, periodStart: monthStart, periodEnd: monthEnd, targetValue: 10, createdById: admin.id, notes: 'Máximo de cancelaciones aceptable en el mes' },
+    ],
   });
 
   console.log('Seed completado.');
